@@ -19,7 +19,7 @@ class _RollingState extends State<RollingButton> {
   @override
   Widget build(BuildContext context) {
     return RaisedButton(
-      onPressed: _onPressed,
+      onPressed: _onFuture,
       child: Text('Roll'),
     );
   }
@@ -43,6 +43,14 @@ class _RollingState extends State<RollingButton> {
     final roll1 = _random.nextInt(6) + 1;
     final roll2 = _random.nextInt(6) + 1;
     return [roll1, roll2];
+  }
+
+  void _onFuture() {
+    Future.delayed(Duration(seconds: 2), (){
+      return "hi world!";
+    }).then((data) {
+      debugPrint('data: $data');
+    });
   }
 }
 
