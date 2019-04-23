@@ -1,6 +1,15 @@
+
 import 'package:flutter/material.dart';
 
-void main() {
+import 'echo_client.dart';
+import 'echo_server.dart';
+import 'message.dart';
+
+
+HttpEchoServer _server;
+HttpEchoClient _client;
+
+void main() async {
   runApp(MyApp());
 }
 
@@ -15,19 +24,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class Message {
-  final String msg;
-  final int timestamp;
-
-  Message(this.msg, this.timestamp);
-
-  @override
-  String toString() {
-    return 'Message{msg: $msg, timestamp: $timestamp}';
-  }
-
-}
-
 class MessageList extends StatefulWidget {
 
   MessageList({Key key}): super(key: key);
@@ -38,8 +34,31 @@ class MessageList extends StatefulWidget {
   }
 }
 
-class _MessageListState extends State<MessageList> {
+// 为了使用 WidgetsBinding，我们继承 WidgetsBindingObserver 然后覆盖相应的方法
+class _MessageListState extends State<MessageList> with WidgetsBindingObserver {
   final List<Message> messages = [];
+
+  @override
+  void initState() {
+    super.initState();
+
+    const port = 6060;
+    _server = HttpEchoServer(port);
+    // initState 不是一个 async 函数，这里我们不能直接 await _server.start(),
+    // future.then(...) 跟 await 是等价的
+    _server.start().then((_) {
+      // 等服务器启动后才创建客户端
+      _client = HttpEchoClient(port);
+      _client.getHistory().then((list) {
+        setState(() {
+          messages.addAll(list);
+        });
+      });
+
+      // 注册生命周期回调
+      WidgetsBinding.instance.addObserver(this);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -62,14 +81,21 @@ class _MessageListState extends State<MessageList> {
       messages.add(msg);
     });
   }
+
+  // 最后需要做的是，在 APP 退出后关闭服务器。这就要求我们能够收到应用生命周期变化的通知
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      var server = _server;
+      _server = null;
+      server?.close();
+    }
+  }
 }
 
 
 class MessageListScreen extends StatelessWidget {
 
-  //引入一个 GlobalKey 的原因在于，
-  //MessageListScreen 需要把从 AddMessageScreen 返回的数据放到 _MessageListState 中，
-  //而我们无法从 MessageList 拿到这个 state。
   final messageListKey = GlobalKey<_MessageListState>(debugLabel: 'messageListKey');
 
   @override
@@ -89,11 +115,14 @@ class MessageListScreen extends StatelessWidget {
                 context,
                 MaterialPageRoute(builder: (_) => AddMessageScreen())
             );
-            debugPrint('result = $result');
-            if (result is Message) {
-              //GlobalKey 是应用全局唯一的 key，把这个 key 设置给 MessageList 后，
-              //我们就能够通过这个 key 拿到对应的 statefulWidget 的 state。
-              messageListKey.currentState.addMessage(result);
+            if (_client == null) return;
+            // 现在，我们不是直接构造一个 Message，而是通过 _client 把消息
+            // 发送给服务器
+            var msg = await _client.send(result);
+            if (msg != null) {
+              messageListKey.currentState.addMessage(msg);
+            } else {
+              debugPrint('fail to send $result');
             }
           },
           tooltip: 'Add message',
@@ -152,11 +181,7 @@ class _MessageFormState extends State<MessageForm> {
           InkWell(
             onTap: () {
               debugPrint('send: ${editController.text}');
-              final msg = Message(
-                  editController.text,
-                  DateTime.now().millisecondsSinceEpoch
-              );
-              Navigator.pop(context, msg);
+              Navigator.pop(context, editController.text);
             },
             onDoubleTap: () => debugPrint('double tapped'),
             onLongPress: () => debugPrint('long pressed'),
@@ -188,3 +213,4 @@ class AddMessageScreen extends StatelessWidget {
     );
   }
 }
+
