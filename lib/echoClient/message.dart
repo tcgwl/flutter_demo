@@ -1,4 +1,9 @@
 class Message {
+  static const tableName = 'History';
+  static const columnId = 'id';
+  static const columnMsg = 'msg';
+  static const columnTimestamp = 'timestamp';
+
   final String msg;
   final int timestamp;
   

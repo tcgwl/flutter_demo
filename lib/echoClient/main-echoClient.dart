@@ -1,10 +1,7 @@
-
 import 'package:flutter/material.dart';
-
 import 'echo_client.dart';
 import 'echo_server.dart';
 import 'message.dart';
-
 
 HttpEchoServer _server;
 HttpEchoClient _client;
@@ -14,7 +11,6 @@ void main() async {
 }
 
 class MyApp extends StatelessWidget {
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -93,9 +89,7 @@ class _MessageListState extends State<MessageList> with WidgetsBindingObserver {
   }
 }
 
-
 class MessageListScreen extends StatelessWidget {
-
   final messageListKey = GlobalKey<_MessageListState>(debugLabel: 'messageListKey');
 
   @override

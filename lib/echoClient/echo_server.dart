@@ -1,10 +1,8 @@
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:path_provider/path_provider.dart' as path_provider;
-
+import 'package:sqflite/sqflite.dart';
 import 'message.dart';
 
 class HttpEchoServer {
@@ -13,12 +11,12 @@ class HttpEchoServer {
 
   final int port;
   HttpServer httpServer;
-  // 在 Dart 里面，函数也是 first class object，我们可以直接把
-  // 函数放到 Map 里面
+  // 在 Dart 里面，函数也是 first class object，我们可以直接把函数放到 Map 里面
   Map<String, void Function(HttpRequest)> routes;
 
   final List<Message> messages = [];
   String historyFilepath;
+  Database database;
 
   HttpEchoServer(this.port) {
     _initRoutes();
@@ -36,8 +34,12 @@ class HttpEchoServer {
 
   // 返回一个 Future，这样客户端就能够在 start 完成后做一些事
   Future start() async {
-    historyFilepath = await _historyPath();
-    await _loadMessages();
+//    historyFilepath = await _historyPath();
+//    await _loadMessagesWithFile();
+
+    await _initDatabase();
+    await _loadMessagesWithDB();
+
     // 1. 创建一个 HttpServer
     httpServer = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
     // 2. 开始监听客户请求
@@ -89,11 +91,12 @@ class HttpEchoServer {
       var data = json.encode(message);
       // 把响应写回给客户端
       request.response.write(data);
+      _storeMessage(message); //db存储
     } else {
       request.response.statusCode = HttpStatus.badRequest;
     }
     request.response.close();
-    _storeMessages();
+    //_storeMessages(); //File存储
   }
 
   Future<bool> _storeMessages() async {
@@ -115,7 +118,7 @@ class HttpEchoServer {
     }
   }
 
-  Future _loadMessages() async {
+  Future _loadMessagesWithFile() async {
     try {
       var file = File(historyFilepath);
       var exists = await file.exists();
@@ -142,5 +145,43 @@ class HttpEchoServer {
     var server = httpServer;
     httpServer = null;
     await server?.close();
+    var db = database;
+    database = null;
+    await db?.close();
+  }
+
+  Future _initDatabase() async {
+    var path = await getDatabasesPath() + '/history.db';
+    database = await openDatabase(
+        path,
+        version: 1,
+        onCreate: (db, version) async {
+          var sql = '''
+          CREATE TABLE ${Message.tableName} (
+            ${Message.columnId} INTEGER PRIMARY KEY,
+            ${Message.columnMsg} TEXT,
+            ${Message.columnTimestamp} INTEGER
+          )
+          ''';
+          await db.execute(sql);
+        }
+    );
+  }
+
+  void _storeMessage(Message message) {
+    database.insert(Message.tableName, message.toJson());
+  }
+
+  Future _loadMessagesWithDB() async {
+    var list = await database.query(
+        Message.tableName,
+        columns: [Message.columnMsg, Message.columnTimestamp],
+        orderBy: Message.columnId
+    );
+    for (var item in list) {
+      // fromJson 也适用于使用数据库的场景
+      var message = Message.fromJson(item);
+      messages.add(message);
+    }
   }
 }
