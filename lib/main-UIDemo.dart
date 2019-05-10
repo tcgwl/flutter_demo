@@ -176,6 +176,9 @@ class _MessageFormState extends State<MessageForm> {
         Expanded(
           child: TextField(
             controller: editController,
+            onChanged: (val) {
+              print('TextField\'s content: $val');
+            },
           ),
         ),
         Container(
